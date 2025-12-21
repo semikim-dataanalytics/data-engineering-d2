@@ -1,6 +1,4 @@
-############################
-# DMS Replication Instance
-############################
+# DMS Replication Instance: the managed compute resource that runs DMS replication tasks
 resource "aws_dms_replication_instance" "this" {
   replication_instance_id = "dms-replication-instance"
   replication_instance_class = "dms.t3.micro"
@@ -8,9 +6,9 @@ resource "aws_dms_replication_instance" "this" {
   publicly_accessible = true
 }
 
-############################
-# DMS Source Endpoint (RDS)
-############################
+
+# Source endpoint: represents the operational database (e.g., Amazon RDS)
+# from which data will be replicated.
 resource "aws_dms_endpoint" "source" {
   endpoint_id   = "source-rds-endpoint"
   endpoint_type = "source"
@@ -23,25 +21,23 @@ resource "aws_dms_endpoint" "source" {
   database_name = "example_db"
 }
 
-############################
-# DMS Target Endpoint (S3)
-############################
-resource "aws_dms_endpoint" "target" {
+
+# Target endpoint: represents the S3 landing zone where replicated data
+# will be stored in a raw format.
   endpoint_id   = "target-s3-endpoint"
   endpoint_type = "target"
   engine_name   = "s3"
 
   s3_settings {
-    bucket_name = "example-dms-landing-zone"
+    bucket_name = "example-dms-landing-zone"  # S3 bucket
     bucket_folder = "raw"
     compression_type = "GZIP"
-    data_format = "parquet"
+    data_format = "parquet"  #
   }
 }
 
-############################
-# DMS Replication Task
-############################
+
+# DMS Replication Task (full load + CDC)
 resource "aws_dms_replication_task" "this" {
   replication_task_id = "dms-full-load-cdc-task"
   migration_type = "full-load-and-cdc"

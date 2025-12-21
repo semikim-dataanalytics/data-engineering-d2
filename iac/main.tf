@@ -1,3 +1,4 @@
+# Configure Terraform and required providers.
 terraform {
   required_version = ">= 1.3.0"
 
@@ -9,6 +10,7 @@ terraform {
   }
 }
 
+# Configure the AWS provider.
 provider "aws" {
   region = "us-east-1"
 }
