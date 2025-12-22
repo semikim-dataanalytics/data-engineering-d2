@@ -1,73 +1,71 @@
 # Modern Data Warehouse Foundation (Assignment D2)
 
-This project demonstrates the design of a modern, serverless data warehouse
-architecture on AWS using Infrastructure as Code (Terraform).
+This project demonstrates the design of a modern, serverless data warehouse architecture on AWS using Infrastructure as Code (Terraform).
 
-The objective is to consolidate data from operational databases into a
-centralized analytics platform while minimizing operational overhead, avoiding
-impact on production systems, and enforcing fine-grained data governance.
-
----
+The objective is to consolidate data from operational databases into a centralized analytics platform while minimizing operational overhead, avoiding impact on production systems, and enforcing fine-grained data governance.
 
 ## Architecture Overview
 
-The platform follows a decoupled, serverless architecture composed of distinct
-ingestion, storage, processing, and analytics layers.
+The platform follows a decoupled, serverless architecture composed of distinct ingestion, storage, processing, and analytics layers.
 
-Data is replicated from an operational database into an Amazon S3 landing zone
-using AWS Database Migration Service (DMS) with Full Load and Change Data Capture
-(CDC). Raw data stored in S3 is cataloged and prepared using AWS Glue, then
-loaded into Amazon Redshift Serverless for analytical querying.
+1.  **Operational Database (Amazon RDS)**: Production systems store transactional data in a PostgreSQL RDS database.
+2.  **Data Ingestion (AWS DMS)**: A replication task performs an initial full load and continuous Change Data Capture (CDC) from RDS to Amazon S3.
+3.  **Landing Zone (Amazon S3)**: Data is stored in `parquet` format in an S3 bucket.
+4.  **Data Catalog (AWS Glue)**: A Glue Crawler automatically discovers schema changes and updates the Glue Data Catalog.
+5.  **Orchestration (AWS Step Functions)**: A state machine orchestrates the ETL process:
+    *   Triggers Redshift Data API to `COPY` data from S3 to a staging table.
+    *   Executes a `MERGE` operation to upsert data into the final `orders` table.
+6.  **Analytics (Amazon Redshift Serverless)**: Provides the compute engine for querying the data.
+7.  **Governance (AWS Lake Formation)**: Manages fine-grained access control (column-level) for data consumers.
 
-AWS Lake Formation is used to enforce table- and column-level access control on
-datasets registered in the Glue Data Catalog.
+## Deployment Instructions
 
----
+### Prerequisites
+*   Terraform >= 1.3.0
+*   AWS CLI configured
+*   **Account Requirements**:
+    *   Service-linked role for DMS (`dms-vpc-role`).
+    *   Active subscription/eligibility for Redshift Serverless.
+    *   VPC with valid subnets.
 
-## End-to-End Data Flow
+### Steps
+1.  Navigate to `iac/` directory:
+    ```bash
+    cd iac
+    ```
+2.  Initialize and apply Terraform:
+    ```bash
+    terraform init
+    terraform apply
+    ```
+3.  **Post-Deployment Setup (One-time)**:
+    *   Run the SQL in `sql/01_create_tables.sql` in Redshift Query Editor v2 to create the target tables (`staging_orders`, `orders`).
 
-1. **Operational Database (Amazon RDS)**  
-   Production systems store transactional data in an RDS database (e.g.,
-   PostgreSQL or MySQL).
+### Data Flow
+1.  **Ingest**: Insert data into the RDS instance. DMS captures this and writes to `s3://<bucket>/raw/orders/`.
+2.  **Catalog**: The Glue Crawler (scheduled or triggered) updates the Data Catalog.
+3.  **Load**: The EventBridge Scheduler triggers the Step Function.
+4.  **Process**:
+    *   Step Function calls `copy_staging` (Redshift Data API).
+    *   Step Function calls `merge_data` (Redshift Data API).
+5.  **Analyze**: Users query the `orders` table in Redshift.
 
-2. **Data Ingestion (AWS DMS – Full Load + CDC)**  
-   AWS DMS performs an initial full data load and continuously captures changes
-   (inserts, updates, deletes) using CDC, minimizing load on the source database.
+## Permissions Model (Lake Formation)
 
-3. **Landing Zone (Amazon S3)**  
-   Replicated data is written to Amazon S3 in a raw format. S3 provides durable,
-   cost-effective storage and decouples ingestion from downstream processing.
+*   **Admins**: Full access (defined in `lakeformation.tf`).
+*   **Analyst Role**:
+    *   Database: `DESCRIBE` on `analytics_db`.
+    *   Table: `SELECT` on `orders`.
+    *   **Column-level security**: Restricted access. Can only select `order_id`, `user_id`, `total_amount` (PII/sensitive columns excluded).
 
-4. **Data Catalog & Orchestration (AWS Glue)**  
-   Glue Crawlers catalog incoming data, and Glue Jobs or Workflows prepare data
-   for analytics consumption.
-
-5. **Analytics Layer (Amazon Redshift Serverless)**  
-   Processed data is loaded into Redshift Serverless, enabling scalable
-   analytics without managing clusters.
-
-6. **Data Governance (AWS Lake Formation)**  
-   Fine-grained access control is enforced at the database, table, and column
-   levels based on IAM roles.
-
----
-
-## Repository Structure
-
-```text
-DATA-ENGINEERING-D2/
-├── iac/                         # Infrastructure as Code (Terraform)
-│   ├── main.tf                  # AWS provider and core Terraform configuration
-│   ├── variables.tf             # Input variables
-│   ├── outputs.tf               # Terraform outputs
-│   ├── redshift.tf              # Amazon Redshift Serverless resources
-│   ├── dms.tf                   # AWS DMS (RDS → S3, Full Load + CDC)
-│   └── lakeformation.tf         # Lake Formation data governance
-│
-├── sql/                         # SQL templates for CDC processing
-│   ├── 01_create_tables.sql     # Staging and analytics table definitions
-│   ├── 02_load_staging.sql      # Example S3 → Redshift load
-│   └── 03_merge_orders.sql      # MERGE / UPSERT logic for CDC data
-│
-├── .gitignore                   # Git ignore rules (Terraform artifacts)
-└── README.md                    # Project documentation
+## Directory Structure
+*   `iac/`: Terraform configuration files.
+    *   `main.tf`, `variables.tf`, `outputs.tf`: Core Terraform config.
+    *   `rds.tf`: Source PostgreSQL database.
+    *   `dms.tf`, `dms_iam.tf`: Data Migration Service and its IAM roles.
+    *   `s3.tf`: S3 Landing Zone (with random suffix).
+    *   `crawler.tf`: AWS Glue Crawler.
+    *   `redshift.tf`: Redshift Serverless and IAM.
+    *   `workflow.tf`: Step Functions and Scheduler.
+    *   `lakeformation.tf`: Data governance settings.
+*   `sql/`: SQL scripts for table creation and logic reference.

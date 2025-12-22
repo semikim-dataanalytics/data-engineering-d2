@@ -25,37 +25,35 @@ resource "aws_iam_role" "analyst_role" {
 
 # Database-level Permission: Allows the analyst role to discover and describe metadata
 # within the specified database.
-resource "aws_lakeformation_permissions" "analyst_db_access" {
-  principal   = aws_iam_role.analyst_role.arn
-  permissions = ["DESCRIBE"]
+# Note: These permissions require the database and table to exist in the Glue/Redshift Catalog first.
+# For the initial deployment, we comment them out.
 
-  database {
-    name = "analytics_db"
-  }
-}
+# resource "aws_lakeformation_permissions" "analyst_db_access" {
+#   principal   = aws_iam_role.analyst_role.arn
+#   permissions = ["DESCRIBE"]
+#
+#   database {
+#     name = "analytics_db"
+#   }
+# }
 
+# resource "aws_lakeformation_permissions" "analyst_table_access" {
+#   principal   = aws_iam_role.analyst_role.arn
+#   permissions = ["SELECT"]
+#
+#   table {
+#     database_name = "analytics_db"
+#     name          = "orders"
+#   }
+# }
 
-# Table-level Permission: Grants SELECT access to a specific table.
-resource "aws_lakeformation_permissions" "analyst_table_access" {
-  principal   = aws_iam_role.analyst_role.arn
-  permissions = ["SELECT"]
-
-  table {
-    database_name = "analytics_db"
-    name          = "orders"
-  }
-}
-
-
-# Column-level Permission:  Restricts access to only non-sensitive columns
-# within the table.
-resource "aws_lakeformation_permissions" "analyst_column_access" {
-  principal   = aws_iam_role.analyst_role.arn
-  permissions = ["SELECT"]
-
-  table_with_columns {
-    database_name = "analytics_db"
-    name          = "orders"
-    column_names  = ["order_id", "user_id", "total_amount"]
-  }
-}
+# resource "aws_lakeformation_permissions" "analyst_column_access" {
+#   principal   = aws_iam_role.analyst_role.arn
+#   permissions = ["SELECT"]
+#
+#   table_with_columns {
+#     database_name = "analytics_db"
+#     name          = "orders"
+#     column_names  = ["order_id", "user_id", "total_amount"]
+#   }
+# }
