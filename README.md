@@ -18,6 +18,51 @@ The platform follows a decoupled, serverless architecture composed of distinct i
 6.  **Analytics (Amazon Redshift Serverless)**: Provides the compute engine for querying the data.
 7.  **Governance (AWS Lake Formation)**: Manages fine-grained access control (column-level) for data consumers.
 
+```mermaid
+graph TD
+    subgraph Source["Operational Layer"]
+        RDS[("Amazon RDS<br/>(PostgreSQL)")]
+    end
+
+    subgraph Ingestion["Ingestion Layer"]
+        DMS["AWS DMS<br/>(CDC Replication)"]
+    end
+
+    subgraph Storage["Storage Layer"]
+        S3[("Amazon S3<br/>(Landing Zone/Parquet)")]
+    end
+
+    subgraph Catalog["Metadata Layer"]
+        Crawler["Glue Crawler"]
+        CatalogDB[("Glue Data Catalog")]
+    end
+
+    subgraph Processing["Orchestration & Compute"]
+        SFN["AWS Step Functions"]
+        Redshift["Amazon Redshift Serverless"]
+        LF["AWS Lake Formation<br/>(Governance)"]
+    end
+
+    %% Data Flow
+    RDS -->|WAL Logs| DMS
+    DMS -->|Parquet Files| S3
+    
+    %% Catalog Flow
+    Crawler -->|Crawls| S3
+    Crawler -->|Updates| CatalogDB
+    
+    %% ETL Flow
+    SFN -->|Triggers Data API| Redshift
+    Redshift -->|COPY| S3
+    Redshift -->|MERGE| Redshift
+    
+    %% Governance
+    LF -.->|Permissions| Redshift
+    
+    classDef aws fill:#FF9900,stroke:#232F3E,color:black;
+    class RDS,DMS,S3,Crawler,CatalogDB,SFN,Redshift,LF aws;
+```
+
 ## Deployment Instructions
 
 ### Prerequisites
